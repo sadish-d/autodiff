@@ -101,3 +101,9 @@ Here, we supplied three nodes to the graph, but the graph has five nodes. Confir
 ```
 
 I had fun creating this. It was a great way to learn Julia. If you find errors in my code or have comments, suggestions, do share.
+
+references [retrieved 2023-04-04]:
+
+[an explanation of automatic differentiation using computaitonal graphs](https://colah.github.io/posts/2015-08-Backprop/)
+
+[an implementation of automatic differentiation using graphs and topological sorting](https://github.com/Jmkernes/Automatic-Differentiation/blob/main/AutomaticDifferentiation.ipynb)
