@@ -1,8 +1,8 @@
-# references [retrieved 2023-03-27]):
+# references [retrieved 2023-04-04]:
 # an explanation of automatic differentiation using computaitonal graphs:
 #   https://colah.github.io/posts/2015-08-Backprop/
 # an implementation of automatic differentiation using graphs and topological sorting:
-#   https://towardsdatascience.com/build-your-own-automatic-differentiation-program-6ecd585eec2a
+#   https://github.com/Jmkernes/Automatic-Differentiation/blob/main/AutomaticDifferentiation.ipynb
 
 module AutoDiff
 
