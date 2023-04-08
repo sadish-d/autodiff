@@ -2,7 +2,7 @@
 
 This is a study of forward and backward mode automatic differentation using computational graphs.
 
-We can represent each term or operation in a computational graph as a node. The `Node()` constructor function creates nodes. Here are the nodes of the computation a/x² + b, one node for each step in the computation.
+We can represent each term or operation in a computation as a node. The `Node()` constructor function creates nodes. Here are the nodes of the computation a/x² + b, one node for each step in the computation.
 
 ```julia
 a = 2
