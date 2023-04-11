@@ -1,3 +1,4 @@
+# VERSION == v"1.8.5" # Julia version
 # references [retrieved 2023-04-04]:
 # an explanation of automatic differentiation using computaitonal graphs:
 #   https://colah.github.io/posts/2015-08-Backprop/
@@ -25,7 +26,7 @@ export Graph
 
 # functions
 export inputs
-export names
+export name
 export outputs
 export value
 export bw_diff
@@ -119,6 +120,10 @@ struct Node{T<:all_node_types} <: WhateverNodesAre
 	Node() = Node(EmptyNode)
 end
 
+function node_type(node::Node)
+    return node.node_type
+end
+
 function inputs(node::Node)
     return node.inputs
 end
@@ -162,6 +167,13 @@ end
 function bw_diff(node::Node)
     return node.bw_diff[]
 end
+
+# operator overloading
+Base.:+(node1::Node, node2::Node) 	= Node(Addition, (node1, node2))
+Base.:*(node1::Node, node2::Node) 	= Node(Multiplication, (node1, node2))
+Base.:-(node1::Node, node2::Node) 	= Node(Subtraction, (node1, node2))
+Base.:/(node1::Node, node2::Node) 	= Node(Division, (node1, node2))
+Base.identity(node::Node) 			= Node(Identity, (node,))
 
 """
 	Graph
@@ -424,7 +436,7 @@ end #= end of module =#
 # Examples --------------------------------------------------------------------
 using .AutoDiff
 
-# Example 1
+# Example 1 ---------------------------------------
 # a/x² + b
 a = 2
 b = 30
@@ -442,15 +454,15 @@ graph1 = Graph([n7, n7, n1, n2, n3, n4, n5, n6]) # nodes don't have to be in ord
 autodiff!(graph1, n3)
 autodiff!(graph1, n7, backward=true)
 
-@assert bw_diff(n3) == fw_diff(n7) == -2a/x^3
+@assert bw_diff(n3) == fw_diff(n7) == -2a/x^3 	# -2a/x³
 
 # automatic differentiation does not have to be with respect
 # 	to an end node.
 autodiff!(graph1, n5)
 autodiff!(graph1, n6, backward=true)
-@assert bw_diff(n5) == fw_diff(n6) == -a/x^4
+@assert bw_diff(n5) == fw_diff(n6) == -a/x^4 	# -a/x⁴
 
-# Example 2
+# Example 2 ---------------------------------------
 nn1 = Node(Identity, (Node(),), "node 1")
 nn2 = Node(Identity, (nn1,), "node 2")
 nn3 = Node(Identity, (nn2,), "node 3")
@@ -462,6 +474,69 @@ graph2 = Graph([nn1, nn2, nn3])
 #   can also get added to the graph.
 @assert length(nodes(graph2)) == 5
 
+# Example 3 ---------------------------------------
+# redefining a, b, and x as nodes
+n_a = Node(Constant, (a,), "a")
+n_b = Node(Constant, (b,), "b")
+n_x = Node(Variable, (x,), "x")
+
+n_f = (n_a / (n_x * identity(n_x)) ) + n_b 	# create the "a/x² + b" node
+graph3 = Graph([n_f]) 						# adding one node adds all its ancestors
+
+autodiff!(graph3, n_x)
+autodiff!(graph3, n_f, backward=true)
+
+@assert bw_diff(n_x) == fw_diff(n_f) == -2a/x^3 	# -2a/x³
+
+# Example 4 ---------------------------------------
+# Graphs can hold multiple computations or functions involving multiple inputs and outputs.
+_a = 2
+_b = 3
+_x = 4
+_y = 5
+a = Node(Constant, (_a,), "a")
+b = Node(Constant, (_b,), "b")
+x = Node(Variable, (_x,), "x")
+y = Node(Variable, (_y,), "y")
+
+f = a * x + b * y 				# ax+by
+g = a * b * x + y * identity(y) # abx+y²
+
+multi_graph = Graph([f, g])
+
+# The terminal nodes f and g have their own sets of intermediate
+#   nodes in the graph but a, b, x, and y appear only once since we used
+#   the same objects (with bindings to the symbols :a, :b, :x, and :y) to
+#   define both f and g. These are the nodes in teh graph:
+# 1. a
+# 2. b
+# 3. x
+# 4. y
+# 5. ax
+# 6. by
+# 7. f or ax+by
+# 8. ab
+# 9. abx
+# 10. identity(y)
+# 11. y² or y*identity(y)
+# 12. g or abx+y²
+@assert length(nodes(multi_graph)) == 12
+for n in [a, b, x, y]
+	@assert count(==(n), nodes(multi_graph)) == 1
+end
+
+# Nodes may be entered in any order or repeated.
+Set(nodes(Graph([f, b, g, a, a]))) == Set(nodes(Graph([g, f])))
+
+# both f and g are simultaneously differentiated with respect to x.
+autodiff!(multi_graph, x)
+@assert fw_diff(f) == _a 		# a
+@assert fw_diff(g) == _a * _b 	# ab
+
+# f is differentiated with respect to both x and y at simultaneously.
+autodiff!(multi_graph, f, backward=true)
+@assert bw_diff(x) == _a 			# a
+@assert bw_diff(y) == _b 			# ab
 # -----------------------------------------------------------------------------
 =#
 
