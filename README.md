@@ -2,109 +2,141 @@
 
 This is a study of forward and backward mode automatic differentation using computational graphs.
 
-We can represent each term or operation in a computation as a node. The `Node()` constructor function creates nodes. Here are the nodes of the computation a/x² + b, one node for each step in the computation.
+We represent each term or operation in a computation as a node in a graph. A node carries informaiton on what type of term or variable it represents. Some nodes go into other nodes as inputs. Nodes can be given names to specify the computation they represent. The `Node()` constructor function creates nodes.
+
+We an put nodes in a graph. A graph carries a topologically sorted list of nodes and an adjacency matrix of edges that denote which nodes are inputs to which other nodes. The `Graph()` constructor creates graphs.
+
+Some terminology:
+- output: For a given node, its output node is another node that has the former as an input.
+- terminal nodes: nodes that do not have other nodes as inputs (terminal input nodes) or that do not have other nodes as outputs (terminal output nodes).
+- intermediate nodes: nodes that have other nodes as inputs and outputs.
+- ancestors: For a given node, its ancestors are its input nodes and, recursively, the inputs of inputs.
+- descendents: For a given node, its descendents are its outputs and, recursively, the outputs of its outputs.
+- orphan: An orphan node is a node that is neither an input nor an output node to any other node in a graph.
 
 ```julia
-a = 2
-b = 30
-x = 3
-n1 = Node(Constant, (a,), "a")
-n2 = Node(Constant, (b,), "b")
-n3 = Node(Variable, (x,), "x")
-n4 = Node(Identity, (n3,), "Identity(x)")
-n5 = Node(Multiplication, (n3, n4), "x²")
-n6 = Node(Division, (n1, n5), "a/x²")
-n7 = Node(Addition, (n6, n2), "a/x² + b")
+using .AutoDiff
 ```
 
-A node carries informaiton on what type of term or variable it represents. Some nodes go into other nodes as inputs. Nodes can be given names to specify which point in the computation they represent.
+Let's look at two functions: ax+by and abx+y².
+```julia
+_a = 2
+_b = 3
+_x = 4
+_y = 5
+a = Node(Constant, (_a,), "a")
+b = Node(Constant, (_b,), "b")
+x = Node(Variable, (_x,), "x")
+y = Node(Variable, (_y,), "y")
 
-Once the nodes are created, we can create a graph. The `Graph()` constructor creates graphs. Here is the graph for the above computation of a/x² + b:
+orphan = Node(EmptyNode, (EmptyNode(),), "orphan") # We will use this node to demonstrate some features.
+
+f  = a * x + b * y             # ax+by
+ab = a * b                     # ab : We will use this node to demonstrate some features.
+g  = ab * x + y * identity(y)  # abx+y²
+```
+
+Let's create a graph for `f`. For any node supplied to the `Graph()` constructor as an argument, all its ancestor nodes also get added to the graph.
 
 ```julia
-graph1 = Graph([n7, n7, n1, n2, n3, n4, n5, n6])
+Graph([f])
 ```
 
-It does not matter which order the nodes are supplied in, and whether the same nodes are supplied twice. The constructor function keeps only unique nodes, and sorts them in topological order. When it is done creating a graph, it shows how the nodes are ordered and also shows the directed edges in an adjacency matrix.
-
+We get:
 ```
-order of nodes:
+nodes (ordered):
 a
 x
-Identity(x)
-x²
-a/x²
+node
 b
-a/x² + b
+y
+node
+node
 edges:
 7×7 Matrix{Bool}:
- 0  0  0  0  1  0  0
- 0  0  1  1  0  0  0
- 0  0  0  1  0  0  0
- 0  0  0  0  1  0  0
+ 0  0  1  0  0  0  0
+ 0  0  1  0  0  0  0
  0  0  0  0  0  0  1
+ 0  0  0  0  0  1  0
+ 0  0  0  0  0  1  0
  0  0  0  0  0  0  1
  0  0  0  0  0  0  0
- ```
- The matrix shows, for instance, that the second node (second row) is an input to the third node (third column).
- 
- The bottom left of the adjacency matrix must be empty. Otherwise, it means the graph has cycles, and can not represent a valid computation.
- 
- Now that the graph is constructed, we can do automatic differentiation, both forwards and backwards.
- 
- ```julia
-autodiff!(graph1, n3)
-autodiff!(graph1, n7, backward=true)
-@assert bw_diff(n3) == fw_diff(n7) == -2a/x^3
 ```
 
-The assertion confirms that the we get the same, correct results using both methods.
+The matrix shows, for instance, that the first node `a` (first row) and second node `x` (second row) are inputs to the third node (third column).
 
-Here, we differentiated a terminal output node (one that is not itself an input to another node) with respect to a terminal input node (one that is not an output of another node). But we can also differentiate an intermediate node with respect to another intermediate node.
+The bottom left of the adjacency matrix must be empty. Otherwise, it means the graph has cycles, and can not represent a valid computation.
+
+Graphs can hold multiple computations or functions involving multiple inputs and outputs. Orphan ndoes in a graph do not affect the computations.
 
 ```julia
-autodiff!(graph1, n5)
-autodiff!(graph1, n6, backward=true)
-@assert bw_diff(n5) == fw_diff(n6) == -a/x^4
+graph = Graph([f, g, orphan])
 ```
 
-Nodes not explicitly supplied as an argument to the graph constructor may also get added to the graph. For example:
+Nodes may be entered in any order or repeated.
 
 ```julia
-nn1 = Node(Identity, (Node(),), "1")
-nn2 = Node(Identity, (nn1,), "2")
-nn3 = Node(Identity, (nn2,), "3")
-nn1 = Node(Identity, (nn3,), "4")
-
-graph2 = Graph([nn1, nn2, nn3])
+Graph([g, b, f, a, a]) |> nodes |> Set == Graph([f, g]) |> nodes |> Set
+!(orphan in nodes(Graph([f, g]))) # This node is not added to the graph.
 ```
 
-This creates the following graph:
-```
-order of nodes:
-node
-node 1
-node 2
-node 3
-node 4
-edges:
-5×5 Matrix{Bool}:
- 0  1  0  0  0
- 0  0  1  0  0
- 0  0  0  1  0
- 0  0  0  0  1
- 0  0  0  0  0
- ```
+The terminal nodes `f` and `g` have their own sets of intermediate nodes in the graph but `a`, `b`, `x`, and `y` appear only once since we used the same objects (with bindings to the symbols `a`, `b`, `x`, and `y`) to define both `f` and `g`.
+These are the nodes in the graph:
+1. a
+2. b
+3. x
+4. y
+5. ax
+6. by
+7. f or ax+by
+8. ab
+9. abx
+10. identity(y)
+11. y² or y*identity(y)
+12. g or abx+y²
+13. orphan
 
-Here, we supplied three nodes to the graph, but the graph has five nodes. Confirm this by:
 ```julia
-@assert length(nodes(graph2)) == 5
+@assert length(nodes(graph)) == 13
+for n in [a, b, x, y] # These nodes only appear in the graph once.
+	@assert count(==(n), nodes(graph)) == 1
+end
 ```
+
+Now that we have the graph, let's perform automatic differentiation.
+
+Simultaneously differentiating `f` and `g` with respect to `x`:
+
+```julia
+autodiff!(graph, x)
+@assert fw_diff(f) == _a       # a
+@assert fw_diff(g) == _a * _b  # ab
+```
+
+Differentiating `f` with respect to `x` and `y` simultaneously:
+
+```julia
+autodiff!(graph, f, backward=true)
+@assert bw_diff(x) == _a  # a
+@assert bw_diff(y) == _b  # ab
+```
+
+We can also differentiate intermediate nodes with respect to other nodes, or differentiate nodes with respect to intermediate nodes.
+
+```julia
+autodiff!(graph, ab)
+autodiff!(graph, ab, backward=true)
+@assert bw_diff(x) == 0   # 0
+@assert bw_diff(y) == 0   # 0
+@assert bw_diff(a) == _b  # b
+@assert bw_diff(b) == _a  # a
+@assert fw_diff(f) == 0   # 0
+@assert fw_diff(g) == _x  # x
+```
+
 
 If you find errors in my code or have comments, do share.
 
 references [retrieved 2023-04-04]:
-
-[an explanation of automatic differentiation using computaitonal graphs](https://colah.github.io/posts/2015-08-Backprop/)
-
-[an implementation of automatic differentiation using graphs and topological sorting](https://github.com/Jmkernes/Automatic-Differentiation/blob/main/AutomaticDifferentiation.ipynb)
+- [an explanation of automatic differentiation using computaitonal graphs](https://colah.github.io/posts/2015-08-Backprop/)
+- [an implementation of automatic differentiation using graphs and topological sorting](https://github.com/Jmkernes/Automatic-Differentiation/blob/main/AutomaticDifferentiation.ipynb)
