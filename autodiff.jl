@@ -1,9 +1,4 @@
 # VERSION == v"1.8.5" # Julia version
-# references [retrieved 2023-04-04]:
-# an explanation of automatic differentiation using computaitonal graphs:
-#   https://colah.github.io/posts/2015-08-Backprop/
-# an implementation of automatic differentiation using graphs and topological sorting:
-#   https://github.com/Jmkernes/Automatic-Differentiation/blob/main/AutomaticDifferentiation.ipynb
 
 module AutoDiff
 
@@ -43,14 +38,14 @@ abstract type WhateverNodesAre end
 abstract type Operation end
 abstract type Term end
 
-abstract type Constant <: Term end
-abstract type Variable <: Term end
+abstract type Constant<:Term end
+abstract type Variable<:Term end
 
-abstract type Identity 		 <: Operation end
-abstract type Addition 		 <: Operation end
-abstract type Multiplication <: Operation end
-abstract type Subtraction 	 <: Operation end
-abstract type Division 		 <: Operation end
+abstract type Identity 		<:Operation end
+abstract type Addition 		<:Operation end
+abstract type Multiplication<:Operation end
+abstract type Subtraction 	<:Operation end
+abstract type Division 		<:Operation end
 
 struct EmptyNode<:WhateverNodesAre end
 
@@ -86,7 +81,7 @@ all_node_types = Union{EmptyNode, subtypes(Term)..., subtypes(Operation)...}
 
 	bw_diff: a zero-dimensional array that records a node's backward derivative
 """
-struct Node{T<:all_node_types} <: WhateverNodesAre
+struct Node{T<:all_node_types}<:WhateverNodesAre
 	node_type::Type{T} # node_type is a Type object
 	inputs::Tuple{type1, Vararg{type2}} where {type1<:Union{Real, WhateverNodesAre}, type2<:WhateverNodesAre}
 	name::String
@@ -100,12 +95,12 @@ struct Node{T<:all_node_types} <: WhateverNodesAre
 	# 	x = Array{Union{Nothing, Tuple{Vararg{Node}}}, 0}((Node(),))
 	# see: https://discourse.julialang.org/t/zero-dimensional-arrays-are-acting-strange/96909?u=sadish-d
 	outputs::Array{Union{Nothing, Tuple{Vararg{Node}}}, 0}
-	value::Array{Union{Nothing, Real}, 0}
+	value  ::Array{Union{Nothing, Real}, 0}
 	fw_diff::Array{Union{Nothing, Real}, 0}
 	bw_diff::Array{Union{Nothing, Real}, 0}
 
 	empty_outputs() = Array{Union{Nothing, Tuple{Vararg{Node}}}, 0}(nothing)
-	empty_values() = Array{Union{Nothing, Real}, 0}(nothing)
+	empty_values()  = Array{Union{Nothing, Real}, 0}(nothing)
 
 	function Node{T}(node_type::Type{T}, inputs, name, outputs, value, fw_diff, bw_diff) where T<:all_node_types
 		length(inputs) == length(Set(inputs)) || error("Each input must be a unique object.")
@@ -252,7 +247,7 @@ struct Graph
 		calc_value(node::Node{Division})         = (inputs(node)[1] |> value) / (inputs(node)[2] |> value)
 	
 		for node in ordered_nodes
-			calc_value(node) |> o -> value!(node, o)
+			calc_value(node) |> o-> value!(node, o)
 		end
 		return nothing
 	end
@@ -395,10 +390,10 @@ function autodiff!(graph::Graph, node::Node; backward::Bool=false)
 				bw_diffs = Real[] # to collect the individual contribution of each output and sum later
 				for output in outputs(node_in_path) # since we start from the end of the graph, all outputs should have bw_diff defined now
 					# might not need this condition. All outputs should be nodes.
-					(output isa Node) && bw_diff(output) * immdiff(output, node_in_path) |> o -> push!(bw_diffs, o) # the chain rule of calculus applied backward
+					(output isa Node) && bw_diff(output) * immdiff(output, node_in_path) |> o-> push!(bw_diffs, o) # the chain rule of calculus applied backward
 				end
 				# sum of bw_diffs through all backward paths originating at source node
-				sum(bw_diffs) |> o -> bw_diff!(node_in_path, o)
+				sum(bw_diffs) |> o-> bw_diff!(node_in_path, o)
 			elseif is_after(node_in_path, node)
 				bw_diff!(node_in_path, 0)
 			else
@@ -413,10 +408,10 @@ function autodiff!(graph::Graph, node::Node; backward::Bool=false)
 				fw_diffs = Real[] # to collect the individual contribution of each input and sum later
 				for input in inputs(node_in_path) # since we start from the end of the graph, all inputs should have fw_diff defined now
 					# for Constants and Variables, inputs are not Nodes.
-					(input isa Node) && fw_diff(input) * immdiff(node_in_path, input) |> o -> push!(fw_diffs, o) # the chain rule of calculus applied forward
+					(input isa Node) && fw_diff(input) * immdiff(node_in_path, input) |> o-> push!(fw_diffs, o) # the chain rule of calculus applied forward
 				end
 				# sum of fw_diffs through all forward paths orginating at source node
-				sum(fw_diffs) |> o -> fw_diff!(node_in_path, o)
+				sum(fw_diffs) |> o-> fw_diff!(node_in_path, o)
 			elseif is_before(node_in_path, node)
 				fw_diff!(node_in_path, 0)
 			else
@@ -432,64 +427,17 @@ end
 end #= end of module =#
 
 
+# references [retrieved 2023-04-04]:
+# an explanation of automatic differentiation using computaitonal graphs:
+#   https://colah.github.io/posts/2015-08-Backprop/
+# an implementation of automatic differentiation using graphs and topological sorting:
+#   https://github.com/Jmkernes/Automatic-Differentiation/blob/main/AutomaticDifferentiation.ipynb
+
 #=
-# Examples --------------------------------------------------------------------
+# Examples ---------------------------------------
 using .AutoDiff
 
-# Example 1 ---------------------------------------
-# a/x² + b
-a = 2
-b = 30
-x = 3
-n1 = Node(Constant, (a,), "a")
-n2 = Node(Constant, (b,), "b")
-n3 = Node(Variable, (x,), "x")
-n4 = Node(Identity, (n3,), "Identity(x)")
-n5 = Node(Multiplication, (n3, n4), "x²")
-n6 = Node(Division, (n1, n5), "a/x²")
-n7 = Node(Addition, (n6, n2), "a/x² + b")
-
-graph1 = Graph([n7, n7, n1, n2, n3, n4, n5, n6]) # nodes don't have to be in order and can be repeated
-
-autodiff!(graph1, n3)
-autodiff!(graph1, n7, backward=true)
-
-@assert bw_diff(n3) == fw_diff(n7) == -2a/x^3 	# -2a/x³
-
-# automatic differentiation does not have to be with respect
-# 	to an end node.
-autodiff!(graph1, n5)
-autodiff!(graph1, n6, backward=true)
-@assert bw_diff(n5) == fw_diff(n6) == -a/x^4 	# -a/x⁴
-
-# Example 2 ---------------------------------------
-nn1 = Node(Identity, (Node(),), "node 1")
-nn2 = Node(Identity, (nn1,), "node 2")
-nn3 = Node(Identity, (nn2,), "node 3")
-nn1 = Node(Identity, (nn3,), "node 4")
-
-graph2 = Graph([nn1, nn2, nn3])
-
-# Nodes not explicitly supplied as an argument to the Graph constructor
-#   can also get added to the graph.
-@assert length(nodes(graph2)) == 5
-
-# Example 3 ---------------------------------------
-# redefining a, b, and x as nodes
-n_a = Node(Constant, (a,), "a")
-n_b = Node(Constant, (b,), "b")
-n_x = Node(Variable, (x,), "x")
-
-n_f = (n_a / (n_x * identity(n_x)) ) + n_b 	# create the "a/x² + b" node
-graph3 = Graph([n_f]) 						# adding one node adds all its ancestors
-
-autodiff!(graph3, n_x)
-autodiff!(graph3, n_f, backward=true)
-
-@assert bw_diff(n_x) == fw_diff(n_f) == -2a/x^3 	# -2a/x³
-
-# Example 4 ---------------------------------------
-# Graphs can hold multiple computations or functions involving multiple inputs and outputs.
+# Let us look at two functions: ax+by and abx+y².
 _a = 2
 _b = 3
 _x = 4
@@ -499,15 +447,39 @@ b = Node(Constant, (_b,), "b")
 x = Node(Variable, (_x,), "x")
 y = Node(Variable, (_y,), "y")
 
-f = a * x + b * y 				# ax+by
-g = a * b * x + y * identity(y) # abx+y²
+orphan = Node(EmptyNode, (EmptyNode(),), "orphan") # We will use this node to demonstrate some features.
 
-multi_graph = Graph([f, g])
+f  = a * x + b * y 			   # ax+by
+ab = a * b 					   # ab : We will use this node to demonstrate some features.
+g  = ab * x + y * identity(y)  # abx+y²
 
-# The terminal nodes f and g have their own sets of intermediate
-#   nodes in the graph but a, b, x, and y appear only once since we used
-#   the same objects (with bindings to the symbols :a, :b, :x, and :y) to
-#   define both f and g. These are the nodes in teh graph:
+# Some terminology:
+# output: For a given node, its output node is another node that has it as an input.
+# terminal nodes: nodes that do not have other nodes as inputs (terminal input nodes) or
+#   that do not have other nodes as outputs (terminal output nodes).
+# intermediate nodes: nodes that are have other nodes as inputs and outputs.
+# ancestors: For a given node, its ancestors are its input nodes and,
+#   recursively, the inputs of inputs.
+# descendents: For a given node, its descendents are its outputs and,
+#   recursively, the outputs of its outputs.
+# orphan: An orphan node is a node that is neither an input nor an output node to any other
+#   node in a graph.
+
+# Graphs can hold multiple computations or functions involving multiple inputs and outputs.
+# If a graph has orphan ndoes does not affect the computations.
+# For any node supplied to the Graph constructor as an argument, all its ancestor nodes (inputs and,
+#   recursively, the inputs of inputs) also get added to the graph.
+
+graph = Graph([f, g, orphan])
+
+# Nodes may be entered in any order or repeated.
+Graph([g, b, f, a, a]) |> nodes |> Set == Graph([f, g]) |> nodes |> Set
+!(orphan in nodes(Graph([f, g]))) # This node is not added to the graph.
+
+# The terminal nodes f and g have their own sets of intermediate nodes in the graph but
+#   a, b, x, and y appear only once since we used the same objects (with bindings to
+#   the symbols :a, :b, :x, and :y) to define both f and g.
+# These are the nodes in the graph:
 # 1. a
 # 2. b
 # 3. x
@@ -520,23 +492,33 @@ multi_graph = Graph([f, g])
 # 10. identity(y)
 # 11. y² or y*identity(y)
 # 12. g or abx+y²
-@assert length(nodes(multi_graph)) == 12
-for n in [a, b, x, y]
-	@assert count(==(n), nodes(multi_graph)) == 1
+# 13. orphan
+@assert length(nodes(graph)) == 13
+for n in [a, b, x, y] # These nodes only appear in the graph once.
+	@assert count(==(n), nodes(graph)) == 1
 end
 
-# Nodes may be entered in any order or repeated.
-Set(nodes(Graph([f, b, g, a, a]))) == Set(nodes(Graph([g, f])))
+# Now that we have the graph, let us perform automatic differentiation.
 
-# both f and g are simultaneously differentiated with respect to x.
-autodiff!(multi_graph, x)
+# Simultaneously differentiate f and g with respect to x.
+autodiff!(graph, x)
 @assert fw_diff(f) == _a 		# a
 @assert fw_diff(g) == _a * _b 	# ab
 
-# f is differentiated with respect to both x and y at simultaneously.
-autodiff!(multi_graph, f, backward=true)
-@assert bw_diff(x) == _a 			# a
-@assert bw_diff(y) == _b 			# ab
+# Differentiate f with respect to x and y simultaneously.
+autodiff!(graph, f, backward=true)
+@assert bw_diff(x) == _a 		# a
+@assert bw_diff(y) == _b 		# ab
+
+# We can also differentiate intermediate nodes with respect to other nodes, or
+#   differentiate nodes with respect to intermediate nodes.
+autodiff!(graph, ab)
+autodiff!(graph, ab, backward=true)
+@assert bw_diff(x) == 0 	# 0
+@assert bw_diff(y) == 0 	# 0
+@assert bw_diff(a) == _b 	# b
+@assert bw_diff(b) == _a 	# a
+@assert fw_diff(f) == 0 	# 0
+@assert fw_diff(g) == _x 	# x
 # -----------------------------------------------------------------------------
 =#
-
