@@ -435,7 +435,7 @@ end #= end of module =#
 # [an explanation of automatic differentiation using computaitonal graphs](https://colah.github.io/posts/2015-08-Backprop/)
 # [an implementation of automatic differentiation using graphs and topological sorting](https://github.com/Jmkernes/Automatic-Differentiation/blob/main/AutomaticDifferentiation.ipynb)
 
-#
+#=
 # Examples ----------------------------------------------------
 # automatic differentiation
 
@@ -556,5 +556,5 @@ autodiff!(graph, ab, backward=true)
 @assert fw_diff(f) == 0   # 0
 @assert fw_diff(g) == _x  # x
 # -------------------------------------------------------------
-#
+=#
 
