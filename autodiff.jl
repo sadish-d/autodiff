@@ -107,12 +107,14 @@ struct Node{T<:all_node_types}<:WhateverNodesAre
         return new{T}(node_type, inputs, name, outputs, value, fw_diff, bw_diff)
     end
 
-    Node(node_type::Type{T}, inputs, name, outputs, value, fw_diff, bw_diff) where T<:all_node_types = Node{T}(node_type::Type{T}, inputs, name, outputs, value, fw_diff, bw_diff)
-    Node(node_type, inputs, name) = Node(node_type, inputs, name, empty_outputs(), empty_values(), empty_values(), empty_values())
-    Node(node_type, inputs) = Node(node_type, inputs, "node", empty_outputs(), empty_values(), empty_values(), empty_values())
+    Node(node_type::Type{T}, inputs, name, outputs, value, fw_diff, bw_diff) where T<:all_node_types =
+        Node{T}(node_type::Type{T}, inputs, name, outputs, value, fw_diff, bw_diff)
+    
+    Node(node_type, inputs, name) = Node(node_type, inputs, name,   empty_outputs(), empty_values(), empty_values(), empty_values())
+    Node(node_type, inputs)       = Node(node_type, inputs, "node", empty_outputs(), empty_values(), empty_values(), empty_values())
     # Nodes with only type or empty nodes may be useful for creating graphs. Maybe.
-    Node(node_type) = Node(node_type, (EmptyNode(),), "node", empty_outputs(), empty_values(), empty_values(), empty_values())
-    Node() = Node(EmptyNode)
+    Node(node_type)               = Node(node_type, (EmptyNode(),), "node", empty_outputs(), empty_values(), empty_values(), empty_values())
+    Node()                        = Node(EmptyNode)
 end
 
 function node_type(node::Node)
@@ -436,7 +438,10 @@ end #= end of module =#
 # [an implementation of automatic differentiation using graphs and topological sorting](https://github.com/Jmkernes/Automatic-Differentiation/blob/main/AutomaticDifferentiation.ipynb)
 
 #=
-# Examples ----------------------------------------------------
+# -------------------------------------------------------------
+# Examples
+# -------------------------------------------------------------
+
 # automatic differentiation
 
 # This is a study of forward and backward mode automatic differentation using computational graphs.
@@ -555,6 +560,7 @@ autodiff!(graph, ab, backward=true)
 @assert bw_diff(b) == _a  # a
 @assert fw_diff(f) == 0   # 0
 @assert fw_diff(g) == _x  # x
+# -------------------------------------------------------------
 # -------------------------------------------------------------
 =#
 
