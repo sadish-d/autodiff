@@ -22,7 +22,7 @@ export Graph
 # functions
 export inputs
 export name
-export output
+export outputs
 export value
 export bw_diff
 export fw_diff
@@ -30,7 +30,7 @@ export fw_diff
 export nodes
 export edges
 
-export immdiff
+export edge_diff
 export autodiff!
 
 
@@ -324,44 +324,44 @@ Base.show(io::IO, graph::Graph) = print(io, "nodes: ", graph.nodes, " edges: ", 
     When applied on graph returns a matrix of differentiation of
         each node with respect to another.
 """
-function immdiff(node::Node{Identity}, n::Node)
+function edge_diff(node::Node{Identity}, n::Node)
     n == node && return 1
     n == inputs(node)[1] && return 1
     return 0
 end
-function immdiff(node::Node{Constant}, n::Node)
+function edge_diff(node::Node{Constant}, n::Node)
     n == node && return 1
     return 0
 end
-function immdiff(node::Node{Variable}, n::Node)
+function edge_diff(node::Node{Variable}, n::Node)
     n == node && return 1
     return 0
 end
-function immdiff(node::Node{Addition}, n::Node)
+function edge_diff(node::Node{Addition}, n::Node)
     n == inputs(node)[1] && return 1
     n == inputs(node)[2] && return 1
     n == node && return 1
     return 0
 end
-function immdiff(node::Node{Multiplication}, n::Node)
+function edge_diff(node::Node{Multiplication}, n::Node)
     n == inputs(node)[1] && return inputs(node)[2] |> value
     n == inputs(node)[2] && return inputs(node)[1] |> value
     n == node && return 1
     return 0
 end
-function immdiff(node::Node{Subtraction}, n::Node)
+function edge_diff(node::Node{Subtraction}, n::Node)
     n == inputs(node)[1] && return 1
     n == inputs(node)[2] && return -1
     n == node && return 1
     return 0
 end
-function immdiff(node::Node{Division}, n::Node)
+function edge_diff(node::Node{Division}, n::Node)
     n == inputs(node)[1] && return 1 / (inputs(node)[2] |> value)
     n == inputs(node)[2] && return -(inputs(node)[1] |> value) / ((inputs(node)[2] |> value) * (inputs(node)[2] |> value))
     n == node && return 1
     return 0
 end
-function immdiff(graph::Graph)
+function edge_diff(graph::Graph)
     _nodes = nodes(graph) # Nodes are topologically sorted.
     _edges  = edges(graph)
     # matrix for storing differentiation at each edge
@@ -369,7 +369,7 @@ function immdiff(graph::Graph)
     for i in CartesianIndices(d_graph)
         node_in  = _nodes[i[1]]
         node_out = _nodes[i[2]]
-        d_graph[i] = immdiff(node_out, node_in)
+        d_graph[i] = edge_diff(node_out, node_in)
         i == CartesianIndex(2, 4) && begin
         end
     end
@@ -395,7 +395,7 @@ function autodiff!(graph::Graph, node::Node; backward::Bool=false)
                 bw_diffs = Real[] # to collect the individual contribution of each output and sum later
                 for output in outputs(node_in_path) # since we start from the end of the graph, all outputs should have bw_diff defined now
                     # might not need this condition. All outputs should be nodes.
-                    (output isa Node) && bw_diff(output) * immdiff(output, node_in_path) |> o-> push!(bw_diffs, o) # the chain rule of calculus applied backward
+                    (output isa Node) && bw_diff(output) * edge_diff(output, node_in_path) |> o-> push!(bw_diffs, o) # the chain rule of calculus applied backward
                 end
                 # sum of bw_diffs through all backward paths originating at source node
                 sum(bw_diffs) |> o-> bw_diff!(node_in_path, o)
@@ -413,7 +413,7 @@ function autodiff!(graph::Graph, node::Node; backward::Bool=false)
                 fw_diffs = Real[] # to collect the individual contribution of each input and sum later
                 for input in inputs(node_in_path) # since we start from the end of the graph, all inputs should have fw_diff defined now
                     # for Constants and Variables, inputs are not Nodes.
-                    (input isa Node) && fw_diff(input) * immdiff(node_in_path, input) |> o-> push!(fw_diffs, o) # the chain rule of calculus applied forward
+                    (input isa Node) && fw_diff(input) * edge_diff(node_in_path, input) |> o-> push!(fw_diffs, o) # the chain rule of calculus applied forward
                 end
                 # sum of fw_diffs through all forward paths orginating at source node
                 sum(fw_diffs) |> o-> fw_diff!(node_in_path, o)
